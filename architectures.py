@@ -9,7 +9,7 @@ class FeedForward(torch.nn.Module):
         self,
         input_dim,
         output_dim,
-        activation = torch.nn.ReLU,
+        activation = torch.nn.ReLU(),
         **kwargs
     ):
         super().__init__(**kwargs)
@@ -57,7 +57,8 @@ class Attention(torch.nn.Module):
         super().__init__()
 
 
-    def forward(queries,
+    def forward(self,
+                queries,
                 keys,
                 values,
                 d_k,
@@ -82,8 +83,7 @@ class MultiHeadedAttention(torch.nn.Module):
                  d_value,
                  d_hidden,
                  d_model,
-                 activation = torch.nn.ReLU,
-                 attention = DotProductAttention()
+                 attention = Attention(),
                  **kwargs
                 ):
         super().__init__(**kwargs)
@@ -91,11 +91,11 @@ class MultiHeadedAttention(torch.nn.Module):
         self.heads = heads
         self.d_query = d_query
         self.d_key = d_key
-        self.d_values = d_values
+        self.d_values = d_value
         self.d_hidden = d_hidden
         self.W_q = torch.nn.Linear(d_query, d_hidden*self.heads)
         self.W_k = torch.nn.Linear(d_key, d_hidden*self.heads)
-        self.W_v = torch.nn.Linear(d_values, d_hidden*self.heads)
+        self.W_v = torch.nn.Linear(d_value, d_hidden*self.heads)
         self.W_o = torch.nn.Linear(self.heads*d_hidden, d_model)
 
     def reshape_tensor(self,
@@ -106,9 +106,11 @@ class MultiHeadedAttention(torch.nn.Module):
         if flag:
             x = x.view(x.shape[0], x.shape[1], heads, x.shape[2]//heads)
             x = x.permute(0,2,1,3)
+            
         else:
             x = x.permute(0,2,1,3)
-            x = x.view(x.shape[0], x.shape[1], self.d_model*self.heads)
+            x = x.reshape(x.shape[0], x.shape[1], x.shape[3]*self.heads)
+        return x
 
     def forward(self,
                 query,
@@ -116,15 +118,13 @@ class MultiHeadedAttention(torch.nn.Module):
                 value
                ):
         q, k, v = self.W_q(query), self.W_k(query), self.W_v(value)
-        if self.activation is not None:
-            query_reshaped = self.reshape_tensor(self.activation(q), self.heads, True)
-            key_reshaped   = self.reshape_tensor(self.activation(k), self.heads, True)
-            value_reshaped = self.reshape_tensor(self.activation(v), self.heads, True)
+         
+        query_reshaped = self.reshape_tensor(q, self.heads, True)
+        key_reshaped   = self.reshape_tensor(k, self.heads, True)
+        value_reshaped = self.reshape_tensor(v, self.heads, True)
+        
+        output, attention = self.attention(query_reshaped, key_reshaped, value_reshaped, torch.tensor(self.d_hidden))
+        output_reshaped = self.reshape_tensor(output, self.heads, False)
+        return self.W_o(output_reshaped), output
 
-        activations, attention = self.attention(query_reshaped, key_reshaped, value_reshaped)
-        activations = self.reshape_tensor(activations, self.heads, False)
-        if self.activation is not None:
-            return self.W_o(output), output
-        else:
-            return output, output
         

@@ -6,6 +6,11 @@ import sklearn
 
 import pandas as pd
 
+from Bio import AlignIO
+from Bio.Seq import Seq
+from Bio.SeqRecord import SeqRecord
+from tqdm import tqdm
+
 
 def fasta_to_df(fasta_file, aa_keys = default_aa_keys):
     """
@@ -42,9 +47,9 @@ def create_frequency_matrix(df, aa_keys = default_aa_keys):
     num_columns=len(df['sequence'][0])
     
     frequency_matrix = np.zeros( (len(aa_keys) , num_columns) )
-    print('calcing sum')
+
     freq=df.sum()
-    print('sum calced')
+
     
     num_entries=len(df)
     len_aa_keys = len(aa_keys)
@@ -55,13 +60,7 @@ def create_frequency_matrix(df, aa_keys = default_aa_keys):
     
     return frequency_matrix
 
-if __name__ == '__main__':
-    import torch
-    import numpy as np
-    import sklearn
-    
-    import pandas as pd
-
+def main():
     msa = pd.read_csv('SH3_Full_Dataset_8_9_22.csv')
     msa['Type'].unique()
     naturals_msa = msa[msa['Type']=='Naturals']
@@ -70,10 +69,6 @@ if __name__ == '__main__':
 
     phyla = np.asarray([domain for domain in naturals_msa['Phylum']])
 
-    from Bio import AlignIO
-    from Bio.Seq import Seq
-    from Bio.SeqRecord import SeqRecord
-    from tqdm import tqdm
     vae_alignment = []
     phenotypes = []
     
@@ -101,8 +96,6 @@ if __name__ == '__main__':
         if 1 in freq_matrix[:,i]:
             trim_positions.append(i)
     
-    print(trim_positions)
-    
     
     vae_alignment_trimmed = []
     
@@ -122,3 +115,5 @@ if __name__ == '__main__':
     test_seqs = np.asarray([list(str(alignment.seq)) for alignment in vae_alignment_trimmed])
     
     phenotypes = np.asarray(phenotypes)
+
+    return seqs, norm_re, test_seqs, phenotypes

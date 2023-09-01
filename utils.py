@@ -47,6 +47,17 @@ def reverse_marginal(transition_matrix, forward_step, reverse_step, initial_cond
     denom = torch.diagonal(denom, dim1=-2, dim2=-1)
     return numer/denom
 
+def noiser(sequence_matrix, noise_matrix, number_of_noising_steps, num_states):
+    
+    ts = torch.arange(0,number_of_noising_steps).tile((sequence_matrix.shape[0], 1))
+    noised_samples = torch.zeros((number_of_noising_steps, sequence_matrix.shape[0], sequence_matrix.shape[1], sequence_matrix.shape[2]))
+    noised_samples[0,:,:,:] = sequence_matrix
+    
+    for t in range(1, number_of_noising_steps):
+        noised_samples[t,:,:,:] = sampler(noised_samples[t-1,:,:,:], noise_matrix.matrix_power(t), num_states)
+
+    return ts.permute(-1,-2).type(torch.FloatTensor), noised_samples
+
 
 class ProteinDataset(torch.utils.data.Dataset):
     """
@@ -95,3 +106,4 @@ class ProteinDataset(torch.utils.data.Dataset):
             for index, char in enumerate(seq):
                 one_hot_encoded[index, self.AA_TO_IDX[char]]=1
             return torch.tensor(one_hot_encoded, dtype=torch.float32)
+
