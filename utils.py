@@ -2,6 +2,106 @@ import torch
 import numpy as np
 import sklearn
 
+import numpy as np
+import torch
+import pandas as pd
+
+from tqdm import tqdm
+
+def Gardner_Energy(vector, patterns, bias, order):
+    """
+    computes energy of a spin vector in a gardner model, assuming the spins come in as N_samples x N_dim.
+    vector: N_samples by N_dims
+    patterns: expected to be N_dim by M, number of patterns
+    bias: expected to be (N_dim, )
+    order: float, probably greater than 0 lol
+    
+    returns N_samples x 1 vector 
+    
+    energy = Gardner_Energy(spin_vector, Hopfield_patterns, Hopfield_Bias, order)
+    
+    """
+    
+    (N_dim, M) = patterns.shape
+    
+    bias = bias
+    h_term = torch.matmul(vector, bias)
+    h_term = h_term.squeeze()
+    ##returns N_samples x 1 array, with the bias energies
+    
+    J_term = torch.sum(abs(torch.matmul(vector, patterns))**order, axis = 1) / (N_dim ** (order-1))
+    J_term = J_term.squeeze()
+    ##returns a N_samples x M matrix, when summed over axis=1, yields N_samples x 1 matrix
+    
+    return - h_term - J_term / torch.exp(torch.lgamma(torch.tensor(order+1)))
+
+
+def Gibbs_Sampler(vector, beta, patterns, bias, order, energy_func):
+    """
+    performs one step of gibbs sampling on a spin vector data set, assuming spins come as N_samples x N_dim
+
+    vector: N_samples by N_dims
+    beta: inverse temperature
+    patterns: N_dims by M patterns
+    bias: N_dims by 1
+    order: order of energy
+    energy_func: function, that takes arguments vector, patterns, bias, order, and calculates the negative log likelihood of the data point
+
+    returns:
+    resampled_vector: N_samples by N_dim
+    
+    """
+
+    distribution = torch.distributions.uniform.Uniform(low=0.0, high=1.0)
+
+    original_energy = energy_func(vector, patterns, bias, order)
+
+    
+    energies_from_mutating_vector = torch.zeros(vector.shape)
+    probability_of_accepting_flip = torch.zeros(vector.shape)
+    
+    for i in range(vector.shape[1]):
+        mutated_vector = vector.clone()
+        mutated_vector[:,i] = -1 * mutated_vector[:,i]
+        
+        energies_from_mutating_vector[:,i] = energy_func(mutated_vector, patterns, bias, order)
+    
+        probability_of_accepting_flip[:,i] = torch.exp(-beta * (energies_from_mutating_vector[:,i] - original_energy))
+    
+    mask = 2 * torch.greater(distribution.sample(vector.shape), probability_of_accepting_flip)  -  1
+    
+    resampled_vector = mask*vector
+    
+    return resampled_vector
+
+def generate_data(patterns, bias, N_samples = 100, order = 2, beta = 1, gibbs_sampling_rounds = 100, energy_func = Gardner_Energy):
+    """
+    returns generated data 
+    
+    input:
+        patterns: (N_dim, M) where N_dim is dimension of data, M is number of patterns. Defines the types of data we have
+        bias: (N_dim, 1) where N_dim is the dimension of the data. Biases data to look one way over another
+        N_samples: int, number of samples
+        order: float, greater than 0. Determines the strength of the interactions between the sites
+        beta: inverse temperature, float, greater than 0.
+        gibbs_sampling_rounds: int, how many rounds of gibbs sampling
+        energy_func: python function, energy function
+
+    output:
+        spins: N_samples by N_dim, drawn from distribution exp(-beta * (bias * spins + (patterns * spins)^order)/(N_dim^(order-1) * order!))
+    """
+    
+    N_dim = patterns.shape[0]
+    M     = patterns.shape[1]
+
+    init_spin_vector = 2 * torch.bernoulli(torch.ones(N_samples, N_dim)*0.5) - 1
+
+    spins = init_spin_vector.clone()
+    
+    for i in tqdm(range(gibbs_sampling_rounds)):
+        spins = Gibbs_Sampler(spins, beta, patterns, bias, order, energy_func)
+    return spins
+
 class Noiser():
     def __init__(self,
                  noiser = 'Uniform',

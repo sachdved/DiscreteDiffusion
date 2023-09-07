@@ -6,7 +6,6 @@ from utils import *
 from architectures import *
 import preprocess
 
-
 class Denoiser(torch.nn.Module):
     def __init__(
         self,
@@ -49,7 +48,12 @@ class Denoiser(torch.nn.Module):
         self.feedforward_3 = FeedForward(d_model, d_seq)
         
     def forward(self, X, t):
-        batch_size, seq_length, aa_dim = X.shape[0], X.shape[1], X.shape[2]
+
+        time_points, batch_size, seq_length, aas = X.shape[0], X.shape[1], X.shape[2], X.shape[3]
+        
+        t = t.reshape(t.shape[0] * t.shape[1], 1)
+        X = X.view(time_points*batch_size, seq_length, aas)
+
 
         time_encoding = self.forward_time_1(t)
         time_encoding = self.forward_time_2(time_encoding)
@@ -77,6 +81,5 @@ class Denoiser(torch.nn.Module):
         X_2    = self.feedforward_2(X_2)
 
         X_3    = self.feedforward_3(X_2)
-        X_3    = X_3.view(batch_size, seq_length, aa_dim)
         Y_pred = torch.nn.Softmax(dim=-1)(X_3)
-        return Y_pred
+        return Y_pred.view(time_points, batch_size, seq_length, aas)
