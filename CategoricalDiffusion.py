@@ -55,18 +55,18 @@ class CategoricalDiffusion(torch.nn.Module):
         computes the one step reverse conditional
         input:
             real: tensor, (batch_size, seq_length, num_states)
-            noised_samples: tensor, (num_time_steps, batch_size, seq_length, num_states)
+            noised_sample: tensor, (num_time_steps, batch_size, seq_length, num_states)
         output:
             reverse_conditionals: tensor, (num_time_steps-2, batch_size, seq_length, num_states)
         """
         reverse_conditionals = torch.zeros(
-            noised_samples.shape[0]-2, noised_samples.shape[1], noised_samples.shape[2], noised_samples.shape[3]
+            noised_sample.shape[0]-2, noised_sample.shape[1], noised_sample.shape[2], noised_sample.shape[3]
         )
         x0=real
-        for t in range(2, noised_samples.shape[0]):
+        for t in range(2, noised_sample.shape[0]):
             
-            xt = noised_samples[t]
-            numer = torch.matmul(xt, noise_matrix.t()) * torch.matmul(x0, self.noise_matrix.matrix_power(t-1))
+            xt = noised_sample[t]
+            numer = torch.matmul(xt, self.noise_matrix.t()) * torch.matmul(x0, self.noise_matrix.matrix_power(t-1))
             denom = torch.matmul(torch.matmul(x0, self.noise_matrix.matrix_power(t)), xt.permute(0,2,1))
             denom = torch.diagonal(denom, dim1=-2, dim2=-1).unsqueeze(-1)
             reverse_conditionals[t-2] = numer/denom
