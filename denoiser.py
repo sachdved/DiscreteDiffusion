@@ -6,7 +6,7 @@ from utils import *
 from architectures import *
 import preprocess
 
-class Denoiser(torch.nn.Module):
+class AttentionDenoiser(torch.nn.Module):
     def __init__(
         self,
         heads,
@@ -62,6 +62,82 @@ class Denoiser(torch.nn.Module):
 
         time_encoding = time_encoding.tile((1, seq_length, 1))
         seq_encoding = self.forward_seq_1(X)
+        seq_encoding = self.forward_seq_2(seq_encoding)
+        seq_encoding = self.forward_seq_3(seq_encoding)
+
+        
+        seq_time_encoding = torch.concat([time_encoding, seq_encoding], dim=-1)
+
+        input_encoding = self.forward_time_seq(seq_time_encoding)
+
+        X_1, _ = self.mha_1(input_encoding, input_encoding, input_encoding)
+        X_1    = self.dropout_1(X_1)
+        X_1    = self.addnorm_1(X_1, input_encoding)
+        X_1    = self.feedforward_1(X_1)
+
+        X_2, _ = self.mha_2(X_1, X_1, X_1)
+        X_2    = self.dropout_2(X_2)
+        X_2    = self.addnorm_2(X_2,X_1)
+        X_2    = self.feedforward_2(X_2)
+
+        X_3    = self.feedforward_3(X_2)
+        Y_pred = torch.nn.Softmax(dim=-1)(X_3)
+        return Y_pred.view(time_points, batch_size, seq_length, aas)
+
+
+class MLPDenoiser(torch.nn.Module):
+    def __init__(
+        self,
+        heads,
+        d_time,
+        d_time_hidden,
+        d_seq,
+        d_aas,
+        d_hidden = 128,
+        p = 0.1,
+        activation = torch.nn.ReLU(),
+        **kwargs
+    ):
+        super().__init__(**kwargs)
+        self.activation = activation
+        self.forward_time_1 = FeedForward(d_time, d_time_hidden)
+        self.forward_time_2 = FeedForward(d_time_hidden, d_time_hidden)
+        self.forward_time_3 = FeedForward(d_time_hidden, d_time_hidden)
+ 
+        self.forward_seq_1 = FeedForward(d_seq*d_aas, d_model)
+        self.forward_seq_2 = FeedForward(d_model, d_model)
+        self.forward_seq_3 = FeedForward(d_model, d_model)
+
+        self.forward_time_seq = FeedForward(d_model + d_time_hidden, d_model)
+
+        self.forward_time_seq_1 = FeedForward(d_model, d_model)
+        self.dropout_1 = torch.nn.Dropout(p)
+        
+        self.forward_time_seq_2 = FeedForward(d_model, d_model)
+        self.dropout_2 = torch.nn.Dropout(p)
+        
+        self.forward_time_seq_3 = FeedForward(d_model, d_model)
+        self.dropout_3 = torch.nn.Dropout(p)
+
+        self.feedforward_final = FeedForward(d_model, d_seq*d_aas)
+        
+    def forward(self, X, t):
+
+        time_points, batch_size, seq_length, aas = X.shape[0], X.shape[1], X.shape[2], X.shape[3]
+        
+        t = t.reshape(t.shape[0] * t.shape[1], 1)
+        X = X.view(time_points*batch_size, seq_length, aas)
+
+
+        time_encoding = self.forward_time_1(t)
+        time_encoding = self.forward_time_2(time_encoding)
+        time_encoding = self.forward_time_3(time_encoding)
+        time_encoding = time_encoding.view(time_encoding.shape[0], 1, time_encoding.shape[1])
+
+        time_encoding = time_encoding.tile((1, seq_length, 1))
+
+        X_flattened = torch.nn.Flatten(dim=1)(X)
+        seq_encoding = self.forward_seq_1(X_flattened)
         seq_encoding = self.forward_seq_2(seq_encoding)
         seq_encoding = self.forward_seq_3(seq_encoding)
 
