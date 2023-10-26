@@ -131,7 +131,7 @@ class Noiser():
 def sampler(sequence_matrix, noise_matrix, num_states):
     
     probabilities = torch.matmul(sequence_matrix, noise_matrix.unsqueeze(0))
-    results = torch.nn.functional.one_hot(torch.multinomial(probabilities.view(-1, probabilities.shape[-1]), 1), num_classes=num_states)
+    results = torch.nn.functional.one_hot(torch.multinomial(probabilities.view(-1, probabilities.shape[-1]).double(), 1), num_classes=num_states)
 
     results = results.view(probabilities.shape[0], probabilities.shape[1], num_states)
 
@@ -154,7 +154,7 @@ def noiser(sequence_matrix, noise_matrix, number_of_noising_steps, num_states):
     noised_samples[0,:,:,:] = sequence_matrix
     
     for t in range(1, number_of_noising_steps):
-        noised_samples[t,:,:,:] = sampler(noised_samples[t-1,:,:,:], noise_matrix.matrix_power(t), num_states)
+        noised_samples[t,:,:,:] = sampler(noised_samples[t-1,:,:,:], noise_matrix, num_states)
 
     return ts.permute(-1,-2).type(torch.FloatTensor), noised_samples
 

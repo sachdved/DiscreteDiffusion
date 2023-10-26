@@ -66,13 +66,13 @@ class CategoricalDiffusion(torch.nn.Module):
         for t in range(2, noised_sample.shape[0]):
             
             xt = noised_sample[t]
-            xtminus1 = noised_sample[t-1]
-            numer = torch.matmul(xtminus1, self.noise_matrix) * torch.matmul(x0, self.noise_matrix.matrix_power(t-1))
-            denom = torch.matmul(x0, self.noise_matrix.matrix_power(t))
-                    
-            #denom = torch.matmul(torch.matmul(x0, self.noise_matrix.matrix_power(t)), xt.permute(0,2,1))
-            #denom = torch.diagonal(denom, dim1=-2, dim2=-1).unsqueeze(-1)
-            reverse_conditionals[t-2] = numer/(denom + 1e-6)
+
+            numer = torch.matmul(xt, self.noise_matrix.t()) * torch.matmul(x0, self.noise_matrix.matrix_power(t-1))
+
+            denom = torch.matmul(torch.matmul(x0, self.noise_matrix.matrix_power(t)), xt.permute(0,2,1))
+            
+            denom = torch.diagonal(denom, dim1=-2, dim2=-1).unsqueeze(-1)
+            reverse_conditionals[t-2] = numer/(denom)
             
         return reverse_conditionals
 
